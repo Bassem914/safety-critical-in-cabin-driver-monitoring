@@ -32,28 +32,22 @@ The long-term objective is to build a modular Driver Monitoring System (DMS) cap
 
 The active implementation path is:
 
-`paths/01_fast_prototype/`
+```text
+paths/01_fast_prototype/
+```
 
 ---
 
 # Project Progress
 
-Current Stage
+Current Stage:
 
-**Path 1 – Fast Prototype**
+**Path 1 — Fast Prototype**
 
-Progress
+Current Progress:
 
-**2 / 10 planned milestones completed (20%)**
-
-### Completed
-
-- ✅ Milestone 1 — OpenCV Webcam Smoke Test
-- ✅ Milestone 2 — MediaPipe Face Mesh Landmark Pipeline
-
-### Current
-
-- 🚧 Milestone 3 — Facial Geometry Feature Extraction (EAR & MAR)
+- ✅ 3 milestones completed
+- 🚧 Milestone 4 in preparation
 
 ---
 
@@ -63,20 +57,21 @@ Progress
 |------|-----------|--------|-------------|
 | Path 1 — Fast Prototype | Milestone 1 | ✅ Completed | OpenCV webcam smoke test with FPS overlay and clean shutdown |
 | Path 1 — Fast Prototype | Milestone 2 | ✅ Completed | MediaPipe Face Mesh landmark pipeline with modular perception architecture |
-| Path 1 — Fast Prototype | Milestone 3 | ✅ Completed | Eye Aspect Ratio (EAR) and Mouth Aspect Ratio (MAR) feature extraction |
+| Path 1 — Fast Prototype | Milestone 3 | ✅ Completed | Facial geometry feature extraction using EAR and MAR |
+| Path 1 — Fast Prototype | Milestone 4 | 🚧 Next | Temporal safety logic for eye closure, mouth opening, and face loss |
 
 ---
 
 # Implemented Features
 
-## Milestone 1
+## Milestone 1 — Webcam Smoke Test
 
 - Webcam acquisition
 - FPS computation
 - Camera validation
 - Clean application shutdown
 
-## Milestone 2
+## Milestone 2 — MediaPipe Face Mesh Landmark Pipeline
 
 - MediaPipe Face Mesh integration
 - Facial landmark extraction
@@ -84,6 +79,14 @@ Progress
 - Modular perception architecture
 - Validation framework
 - Documentation framework
+
+## Milestone 3 — Facial Geometry Features
+
+- Eye Aspect Ratio (EAR)
+- Mouth Aspect Ratio (MAR)
+- Real-time feature overlay
+- Modular facial geometry extractor
+- Feature-level validation
 
 ---
 
@@ -117,39 +120,27 @@ deliverables/
 
 Every milestone follows the same engineering workflow:
 
+```text
 Planning
-
-↓
-
+    ↓
 Implementation
-
-↓
-
+    ↓
 Validation
-
-↓
-
+    ↓
 Documentation
-
-↓
-
+    ↓
 Git Review
-
-↓
-
+    ↓
 Commit
-
-↓
-
+    ↓
 Pull Request
-
-↓
-
+    ↓
 Merge
-
-↓
-
+    ↓
+README Update
+    ↓
 Next Milestone
+```
 
 ---
 
@@ -159,10 +150,11 @@ Next Milestone
 
 - ✅ Webcam Smoke Test
 - ✅ MediaPipe Face Mesh Landmark Pipeline
+- ✅ Facial Geometry Feature Extraction
 
 ## In Progress
 
-- 🚧 Facial Geometry Feature Extraction (EAR & MAR)
+- 🚧 Temporal Safety Logic
 
 ## Planned
 
@@ -171,5 +163,26 @@ Next Milestone
 - Body Pose Analysis
 - Hand Tracking
 - Driver State Estimation
-- Temporal Decision Layer
 - Safety-Critical Driver Monitoring Pipeline
+
+---
+
+# Current Technical Stack
+
+- Python
+- OpenCV
+- MediaPipe
+- NumPy
+
+---
+
+# Project Purpose
+
+This project is designed as a research and engineering portfolio for:
+
+- Robotics Vision / Perception Engineering
+- Autonomous Driving / ADAS
+- Driver Monitoring Systems
+- In-cabin sensing
+- Safety-critical perception
+- PhD and research preparation
