@@ -180,9 +180,8 @@ Next Milestone
 
 This project is designed as a research and engineering portfolio for:
 
-- Robotics Vision / Perception Engineering
-- Autonomous Driving / ADAS
 - Driver Monitoring Systems
 - In-cabin sensing
 - Safety-critical perception
+- Autonomous Driving / ADAS
 - PhD and research preparation
