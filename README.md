@@ -63,7 +63,7 @@ Progress
 |------|-----------|--------|-------------|
 | Path 1 — Fast Prototype | Milestone 1 | ✅ Completed | OpenCV webcam smoke test with FPS overlay and clean shutdown |
 | Path 1 — Fast Prototype | Milestone 2 | ✅ Completed | MediaPipe Face Mesh landmark pipeline with modular perception architecture |
-| Path 1 — Fast Prototype | Milestone 3 | 🚧 Next | Eye Aspect Ratio (EAR) and Mouth Aspect Ratio (MAR) feature extraction |
+| Path 1 — Fast Prototype | Milestone 3 | ✅ Completed | Eye Aspect Ratio (EAR) and Mouth Aspect Ratio (MAR) feature extraction |
 
 ---
 
