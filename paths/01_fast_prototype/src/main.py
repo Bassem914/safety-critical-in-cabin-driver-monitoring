@@ -2,18 +2,23 @@ import time
 
 import cv2
 
-from perception.face_features import FaceMeshDetector
+from perception.face_features import FaceMeshDetector, FacialGeometryExtractor
 from perception.visualization import draw_selected_landmarks, draw_status_overlay
 
 
 def main() -> None:
     """
     Path 1 — Fast Prototype
-    Milestone 2 — MediaPipe Face Mesh Landmark Pipeline.
+    Milestone 3 — Facial Geometry Feature Extraction.
 
-    This is the active prototype entry point.
     Milestone 1 remains preserved in:
     src/experiments/webcam_smoke_test.py
+
+    Milestone 2 introduced:
+    MediaPipe Face Mesh landmark detection.
+
+    Milestone 3 adds:
+    EAR and MAR facial geometry features.
     """
 
     camera_index = 0
@@ -25,10 +30,11 @@ def main() -> None:
         return
 
     face_detector = FaceMeshDetector()
+    geometry_extractor = FacialGeometryExtractor()
 
     previous_time = time.time()
 
-    print("[INFO] Milestone 2 Face Mesh landmark pipeline started.")
+    print("[INFO] Milestone 3 facial geometry feature pipeline started.")
     print("[INFO] Press 'q' inside the video window to quit.")
 
     while True:
@@ -56,8 +62,11 @@ def main() -> None:
 
         face_detected = selected_landmarks is not None
         landmark_count = len(selected_landmarks) if selected_landmarks is not None else 0
+        features = None
 
         if selected_landmarks is not None:
+            features = geometry_extractor.compute_features(selected_landmarks)
+
             draw_selected_landmarks(
                 frame=frame,
                 landmarks=selected_landmarks,
@@ -69,10 +78,11 @@ def main() -> None:
             fps=fps,
             face_detected=face_detected,
             landmark_count=landmark_count,
-milestone_text="Path 1 - Milestone 2: Face Mesh Landmark Pipeline",
+            milestone_text="Path 1 - Milestone 3: EAR + MAR Feature Extraction",
+            features=features,
         )
 
-        cv2.imshow("Cabin Sensing - Face Mesh Landmark Pipeline", frame)
+        cv2.imshow("Cabin Sensing - Facial Geometry Features", frame)
 
         key = cv2.waitKey(1) & 0xFF
 
@@ -83,7 +93,7 @@ milestone_text="Path 1 - Milestone 2: Face Mesh Landmark Pipeline",
     face_detector.close()
     cap.release()
     cv2.destroyAllWindows()
-    print("[INFO] Face Mesh landmark pipeline finished cleanly.")
+    print("[INFO] Facial geometry feature pipeline finished cleanly.")
 
 
 if __name__ == "__main__":

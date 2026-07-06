@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import cv2
 
@@ -12,14 +12,6 @@ def draw_selected_landmarks(
     draw_labels: bool = False,
     color: Tuple[int, int, int] = (0, 255, 0),
 ) -> None:
-    """
-    Draw selected face landmarks on the frame.
-
-    By default, only points are drawn. Labels are disabled because they
-    quickly overlap and make the visualization noisy.
-
-    Labels can be enabled later for debugging.
-    """
     for name, point in landmarks.items():
         cv2.circle(frame, point, 4, color, -1)
 
@@ -42,15 +34,8 @@ def draw_status_overlay(
     face_detected: bool,
     landmark_count: int,
     milestone_text: str,
+    features: Optional[Dict[str, float]] = None,
 ) -> None:
-    """
-    Draw real-time status overlay.
-
-    Color convention:
-    - green: detected / normal
-    - red: missing / unsafe candidate
-    - white: neutral information
-    """
     frame_height = frame.shape[0]
 
     cv2.putText(
@@ -92,6 +77,51 @@ def draw_status_overlay(
         2,
         cv2.LINE_AA,
     )
+
+    if features is not None:
+        cv2.putText(
+            frame,
+            f"EAR: {features['ear']:.3f}",
+            (20, 145),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+
+        cv2.putText(
+            frame,
+            f"MAR: {features['mar']:.3f}",
+            (20, 180),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+    else:
+        cv2.putText(
+            frame,
+            "EAR: N/A",
+            (20, 145),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+
+        cv2.putText(
+            frame,
+            "MAR: N/A",
+            (20, 180),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
 
     cv2.putText(
         frame,
