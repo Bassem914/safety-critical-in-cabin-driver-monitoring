@@ -1,78 +1,89 @@
-import cv2
 import time
+
+import cv2
+
+from perception.face_features import FaceMeshDetector
+from perception.visualization import draw_selected_landmarks, draw_status_overlay
+
 
 def main() -> None:
     """
-    OpenCV webcam smoke test.
+    Path 1 — Fast Prototype
+    Milestone 2 — MediaPipe Face Mesh Landmark Pipeline.
 
-    Purpose:
-    - Verify that Python can access the webcam.
-    - Verify that OpenCV can read frames.
-    - Display the live video stream.
-    - Show FPS on the frame.
-    - Exit cleanly when pressing 'q'.
+    This is the active prototype entry point.
+    Milestone 1 remains preserved in:
+    src/experiments/webcam_smoke_test.py
     """
 
     camera_index = 0
     cap = cv2.VideoCapture(camera_index)
 
     if not cap.isOpened():
-        print(f"ERROR: Could not open webcam with camera index {camera_index}.")
-        print("Try changing camera_index to 1 or 2.")
+        print(f"[ERROR] Could not open webcam with camera index {camera_index}.")
+        print("[HINT] Try changing camera_index to 1 or 2.")
         return
 
-    previous_time = time.time()
-    fps = 0.0
+    face_detector = FaceMeshDetector()
 
-    print("Webcam smoke test started.")
-    print("Press 'q' inside the video window to quit.")
+    previous_time = time.time()
+
+    print("[INFO] Milestone 2 Face Mesh landmark pipeline started.")
+    print("[INFO] Press 'q' inside the video window to quit.")
 
     while True:
         ret, frame = cap.read()
 
         if not ret:
-            print("ERROR: Could not read frame from webcam.")
+            print("[ERROR] Could not read frame from webcam.")
             break
+
+        frame = cv2.flip(frame, 1)
+        frame_height, frame_width = frame.shape[:2]
+
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        selected_landmarks = face_detector.detect_selected_landmarks(
+            rgb_frame=rgb_frame,
+            frame_width=frame_width,
+            frame_height=frame_height,
+        )
 
         current_time = time.time()
         elapsed_time = current_time - previous_time
-
-        if elapsed_time > 0:
-            fps = 1.0 / elapsed_time
-
+        fps = 1.0 / elapsed_time if elapsed_time > 0 else 0.0
         previous_time = current_time
 
-        cv2.putText(
-            frame,
-            f"FPS: {fps:.1f}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.0,
-            (0, 255, 0),
-            2,
+        face_detected = selected_landmarks is not None
+        landmark_count = len(selected_landmarks) if selected_landmarks is not None else 0
+
+        if selected_landmarks is not None:
+            draw_selected_landmarks(
+                frame=frame,
+                landmarks=selected_landmarks,
+                draw_labels=False,
+            )
+
+        draw_status_overlay(
+            frame=frame,
+            fps=fps,
+            face_detected=face_detected,
+            landmark_count=landmark_count,
+milestone_text="Path 1 - Milestone 2: Face Mesh Landmark Pipeline",
         )
 
-        cv2.putText(
-            frame,
-            "Press q to quit",
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
-            2,
-        )
-
-        cv2.imshow("Cabin Sensing - Webcam Smoke Test", frame)
+        cv2.imshow("Cabin Sensing - Face Mesh Landmark Pipeline", frame)
 
         key = cv2.waitKey(1) & 0xFF
 
         if key == ord("q"):
-            print("Quit requested by user.")
+            print("[INFO] Quit requested by user.")
             break
 
+    face_detector.close()
     cap.release()
     cv2.destroyAllWindows()
-    print("Webcam smoke test finished cleanly.")
+    print("[INFO] Face Mesh landmark pipeline finished cleanly.")
 
 
 if __name__ == "__main__":
