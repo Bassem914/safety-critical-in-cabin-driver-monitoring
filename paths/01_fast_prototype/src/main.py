@@ -1,6 +1,8 @@
 import cv2
 import time
 
+
+
 def main() -> None:
     """
     OpenCV webcam smoke test.
