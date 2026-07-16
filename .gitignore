@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# External datasets and private recordings
+data/external/
+data/private/
+
+# Local video files
+*.mp4
+*.avi
+*.mov
+*.mkv

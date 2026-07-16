@@ -55,10 +55,11 @@ Current Progress:
 
 | Path | Milestone | Status | Description |
 |------|-----------|--------|-------------|
-| Path 1 — Fast Prototype | Milestone 1 | ✅ Completed | OpenCV webcam smoke test with FPS overlay and clean shutdown |
-| Path 1 — Fast Prototype | Milestone 2 | ✅ Completed | MediaPipe Face Mesh landmark pipeline with modular perception architecture |
-| Path 1 — Fast Prototype | Milestone 3 | ✅ Completed | Facial geometry feature extraction using EAR and MAR |
-| Path 1 — Fast Prototype | Milestone 4 | 🚧 Next | Temporal safety logic for eye closure, mouth opening, and face loss |
+| Path 1 | Milestone 1 | ✅ Completed | Webcam smoke test |
+| Path 1 | Milestone 2 | ✅ Completed | MediaPipe Face Mesh |
+| Path 1 | Milestone 3 | ✅ Completed | Facial geometry features: EAR and MAR |
+| Path 1 | Milestone 4A | ✅ Completed | Source-independent webcam and recorded-video input |
+| Path 1 | Milestone 4B | 🔜 Next | Face-level temporal state baseline |
 
 ---
 
@@ -89,6 +90,20 @@ Current Progress:
 - Feature-level validation
 
 ---
+## Milestone 4A: Source-Independent Video Input
+
+The perception pipeline now supports both live webcam input and local recorded-video input through a common acquisition interface.
+
+Implemented capabilities:
+
+- abstract `VideoSource` interface
+- `WebcamVideoSource`
+- `FileVideoSource`
+- timestamped `FramePacket`
+- source frame indexing
+- optional webcam mirroring
+- shared Face Mesh and EAR/MAR processing pipeline
+- private dataset and video-file protection
 
 # Repository Structure
 
