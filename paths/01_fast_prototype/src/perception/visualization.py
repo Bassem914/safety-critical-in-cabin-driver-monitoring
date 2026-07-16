@@ -133,3 +133,63 @@ def draw_status_overlay(
         2,
         cv2.LINE_AA,
     )
+def draw_source_metadata_overlay(
+    frame,
+    source_name: str,
+    frame_index: int,
+    timestamp_seconds: float,
+) -> None:
+    """
+    Draw source-related metadata on the current frame.
+
+    Args:
+        frame:
+            OpenCV BGR image.
+
+        source_name:
+            Readable identifier of the active video source.
+
+        frame_index:
+            Zero-based index of the current source frame.
+
+        timestamp_seconds:
+            Current position on the source timeline.
+    """
+
+    cv2.putText(
+        frame,
+        f"Source time: {timestamp_seconds:.2f} s",
+        (20, 215),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.60,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
+    cv2.putText(
+        frame,
+        f"Frame index: {frame_index}",
+        (20, 245),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.60,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
+    source_label = source_name
+
+    if len(source_label) > 65:
+        source_label = f"...{source_label[-62:]}"
+
+    cv2.putText(
+        frame,
+        f"Source: {source_label}",
+        (20, 275),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.50,
+        (255, 255, 255),
+        1,
+        cv2.LINE_AA,
+    )
