@@ -9,6 +9,10 @@ from acquisition.video_source import (
     VideoSource,
     WebcamVideoSource,
 )
+from decision.temporal_rules import (
+    TemporalDecisionResult,
+    TemporalRuleEngine,
+)
 from perception.face_features import (
     FaceMeshDetector,
     FacialGeometryExtractor,
@@ -17,6 +21,7 @@ from perception.visualization import (
     draw_selected_landmarks,
     draw_source_metadata_overlay,
     draw_status_overlay,
+    draw_temporal_state_overlay,
 )
 
 
@@ -100,6 +105,7 @@ def run_pipeline(
 
     face_detector = FaceMeshDetector()
     geometry_extractor = FacialGeometryExtractor()
+    temporal_engine = TemporalRuleEngine()
 
     previous_processing_time = perf_counter()
 
@@ -174,15 +180,34 @@ def run_pipeline(
                     landmarks=selected_landmarks,
                     draw_labels=False,
                 )
+            ear = (
+                features.get("ear")
+                if features is not None
+                else None
+            )
 
+            mar = (
+                features.get("mar")
+                if features is not None
+                else None
+            )
+
+            temporal_result: TemporalDecisionResult = (
+                temporal_engine.update(
+                    timestamp_seconds=frame_packet.timestamp_seconds,
+                    face_detected=face_detected,
+                    ear=ear,
+                    mar=mar,
+                )
+            )
             draw_status_overlay(
                 frame=frame,
                 fps=processing_fps,
                 face_detected=face_detected,
                 landmark_count=landmark_count,
                 milestone_text=(
-                    "Path 1 - Milestone 4A: "
-                    "Source-Independent Video Input"
+                    "Path 1 - Milestone 4B: "
+                    "Face-Level Temporal State Baseline"
                 ),
                 features=features,
             )
@@ -193,7 +218,10 @@ def run_pipeline(
                 frame_index=frame_packet.frame_index,
                 timestamp_seconds=frame_packet.timestamp_seconds,           
             )
-            
+            draw_temporal_state_overlay(
+                frame=frame,
+                temporal_result=temporal_result,
+)
             cv2.imshow(
                 "Cabin Sensing - Source Independent Perception",
                 frame,

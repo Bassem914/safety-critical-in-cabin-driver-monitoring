@@ -46,20 +46,28 @@ Current Stage:
 
 Current Progress:
 
-- ✅ 3 milestones completed
-- 🚧 Milestone 4 in preparation
+- ✅ 4 milestones completed
+- 🚧 Milestone 5 in preparation
 
 ---
 
 # Current Implementation Status
 
-| Path | Milestone | Status | Description |
-|------|-----------|--------|-------------|
-| Path 1 | Milestone 1 | ✅ Completed | Webcam smoke test |
-| Path 1 | Milestone 2 | ✅ Completed | MediaPipe Face Mesh |
-| Path 1 | Milestone 3 | ✅ Completed | Facial geometry features: EAR and MAR |
-| Path 1 | Milestone 4A | ✅ Completed | Source-independent webcam and recorded-video input |
-| Path 1 | Milestone 4B | 🔜 Next | Face-level temporal state baseline |
+| Milestone | Status | Description |
+|-----------|--------|-------------|
+| Milestone 1 | ✅ Completed | Webcam smoke test |
+| Milestone 2 | ✅ Completed | MediaPipe Face Mesh landmark pipeline |
+| Milestone 3 | ✅ Completed | Facial geometry features: EAR and MAR |
+| Milestone 4A | ✅ Completed | Source-independent webcam and recorded-video input |
+| Milestone 4B | ✅ Completed | Face-level temporal state baseline |
+| Milestone 5 | 🔜 Next | Head pose estimation |
+| Milestone 6 | Planned | Gaze estimation |
+| Milestone 7 | Planned | Body pose and posture analysis |
+| Milestone 8 | Planned | Hand activity analysis |
+| Milestone 9 | Planned | Unified temporal feature layer |
+| Milestone 10 | Planned | Multimodal driver-behavior modeling |
+| Milestone 11 | Planned | ML and explainable AI |
+| Milestone 12 | Planned | Benchmarking and research evaluation |
 
 ---
 
@@ -105,6 +113,98 @@ Implemented capabilities:
 - shared Face Mesh and EAR/MAR processing pipeline
 - private dataset and video-file protection
 
+### Path 1 — Milestone 4B: Face-Level Temporal State Baseline
+
+Milestone 4B converts frame-level EAR, MAR, and face visibility into timestamp-based temporal event candidates.
+
+Implemented capabilities:
+
+- configurable temporal thresholds
+- source-timestamp-based duration tracking
+- EAR and MAR moving-average support
+- blink candidate detection
+- blink display hold
+- prolonged eye-closure detection
+- sustained mouth-opening detection
+- prolonged face-loss detection
+- state-priority logic
+- timestamp-order validation
+- deterministic temporal-rule smoke tests
+- webcam integration
+- recorded-video integration
+- local DMD sample validation
+- state-dependent visualization colors
+
+Current temporal candidates:
+
+```text
+NORMAL
+BLINK_CANDIDATE
+PROLONGED_EYE_CLOSURE
+SUSTAINED_MOUTH_OPENING
+PROLONGED_FACE_LOSS
+```
+
+These outputs are interpretable prototype event candidates. They are not final medical diagnoses or production safety classifications.
+
+Validation evidence currently includes a locally stored annotated output video and screenshots containing all temporal states. Public evidence will be added after privacy and dataset-redistribution review.
+
+Documentation:
+
+- [Implementation](docs/implementation/path_01_milestone_04B_face_temporal_state_baseline.md)
+- [Validation](docs/validation/path_01_milestone_04B_face_temporal_state_baseline_validation.md)
+
+Next milestone:
+
+**Path 1 — Milestone 5: Head Pose Estimation**
+---
+
+# Current Capabilities
+
+The current Path 1 prototype supports:
+
+- live webcam input
+- local recorded-video input
+- source-independent acquisition
+- source timestamps and frame indices
+- optional webcam mirroring
+- MediaPipe Face Mesh
+- selected facial landmark extraction
+- Eye Aspect Ratio
+- Mouth Aspect Ratio
+- temporal EAR and MAR processing
+- blink candidate detection
+- prolonged eye-closure detection
+- sustained mouth-opening detection
+- prolonged face-loss detection
+- deterministic temporal-rule tests
+- real-time state visualization
+- privacy-aware local validation
+
+---
+# Current Path 1 Architecture
+
+```text
+Webcam / Local Video / Dataset Sample
+                ↓
+Source-Independent Acquisition
+                ↓
+Timestamped FramePacket
+                ↓
+MediaPipe Face Mesh
+                ↓
+Selected Facial Landmarks
+                ↓
+EAR / MAR Feature Extraction
+                ↓
+Temporal Rule Engine
+                ↓
+Face-Level Temporal Candidates
+                ↓
+State and Measurement Visualization
+```
+
+---
 # Repository Structure
 
 ```text
@@ -166,19 +266,22 @@ Next Milestone
 - ✅ Webcam Smoke Test
 - ✅ MediaPipe Face Mesh Landmark Pipeline
 - ✅ Facial Geometry Feature Extraction
+- ✅ Source-Independent Video Input
+- ✅ Face-Level Temporal State Baseline
 
-## In Progress
+## Next
 
-- 🚧 Temporal Safety Logic
+- 🔜 Head Pose Estimation
 
 ## Planned
 
-- Head Pose Estimation
 - Gaze Estimation
 - Body Pose Analysis
 - Hand Tracking
-- Driver State Estimation
-- Safety-Critical Driver Monitoring Pipeline
+- Unified Temporal Feature Layer
+- Multimodal Driver Behavior Modeling
+- ML and Explainable AI
+- Benchmarking and Research Evaluation
 
 ---
 
