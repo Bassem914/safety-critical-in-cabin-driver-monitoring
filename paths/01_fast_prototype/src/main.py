@@ -17,12 +17,20 @@ from perception.face_features import (
     FaceMeshDetector,
     FacialGeometryExtractor,
 )
+from perception.head_pose import (
+    HeadPoseEstimator,
+    HeadPoseResult,
+)
 from perception.visualization import (
+    draw_head_pose_overlay,
     draw_selected_landmarks,
     draw_source_metadata_overlay,
     draw_status_overlay,
     draw_temporal_state_overlay,
 )
+
+
+WINDOW_NAME = "Cabin Sensing - Source Independent Perception"
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -70,7 +78,9 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def create_video_source(args: argparse.Namespace) -> VideoSource:
+def create_video_source(
+    args: argparse.Namespace,
+) -> VideoSource:
     """
     Create the selected source implementation.
     """
@@ -105,6 +115,7 @@ def run_pipeline(
 
     face_detector = FaceMeshDetector()
     geometry_extractor = FacialGeometryExtractor()
+    head_pose_estimator = HeadPoseEstimator()
     temporal_engine = TemporalRuleEngine()
 
     previous_processing_time = perf_counter()
@@ -114,6 +125,17 @@ def run_pipeline(
     print(f"[INFO] Source FPS: {video_source.fps:.2f}")
     print(f"[INFO] Mirroring enabled: {mirror}")
     print("[INFO] Press 'q' inside the video window to quit.")
+
+    cv2.namedWindow(
+        WINDOW_NAME,
+        cv2.WINDOW_NORMAL,
+    )
+
+    cv2.resizeWindow(
+        WINDOW_NAME,
+        1280,
+        720,
+    )
 
     try:
         while True:
@@ -128,7 +150,10 @@ def run_pipeline(
             frame = frame_packet.frame
 
             if mirror:
-                frame = cv2.flip(frame, 1)
+                frame = cv2.flip(
+                    frame,
+                    1,
+                )
 
             frame_height, frame_width = frame.shape[:2]
 
@@ -160,7 +185,9 @@ def run_pipeline(
 
             previous_processing_time = current_processing_time
 
-            face_detected = selected_landmarks is not None
+            face_detected = (
+                selected_landmarks is not None
+            )
 
             landmark_count = (
                 len(selected_landmarks)
@@ -169,10 +196,21 @@ def run_pipeline(
             )
 
             features: Optional[dict[str, float]] = None
+            head_pose_result: Optional[HeadPoseResult] = None
 
             if selected_landmarks is not None:
-                features = geometry_extractor.compute_features(
-                    selected_landmarks
+                features = (
+                    geometry_extractor.compute_features(
+                        selected_landmarks
+                    )
+                )
+
+                head_pose_result = (
+                    head_pose_estimator.estimate(
+                        landmarks=selected_landmarks,
+                        frame_width=frame_width,
+                        frame_height=frame_height,
+                    )
                 )
 
                 draw_selected_landmarks(
@@ -180,6 +218,7 @@ def run_pipeline(
                     landmarks=selected_landmarks,
                     draw_labels=False,
                 )
+
             ear = (
                 features.get("ear")
                 if features is not None
@@ -194,20 +233,28 @@ def run_pipeline(
 
             temporal_result: TemporalDecisionResult = (
                 temporal_engine.update(
-                    timestamp_seconds=frame_packet.timestamp_seconds,
+                    timestamp_seconds=(
+                        frame_packet.timestamp_seconds
+                    ),
                     face_detected=face_detected,
                     ear=ear,
                     mar=mar,
                 )
             )
+            if (
+                not face_detected
+                and temporal_result.face_loss_duration_seconds
+                >= temporal_engine.config.prolonged_face_loss_seconds
+            ):
+                head_pose_estimator.reset()
             draw_status_overlay(
                 frame=frame,
                 fps=processing_fps,
                 face_detected=face_detected,
                 landmark_count=landmark_count,
                 milestone_text=(
-                    "Path 1 - Milestone 4B: "
-                    "Face-Level Temporal State Baseline"
+                    "Path 1 - Milestone 5: "
+                    "Head Pose Estimation"
                 ),
                 features=features,
             )
@@ -216,14 +263,23 @@ def run_pipeline(
                 frame=frame,
                 source_name=frame_packet.source_name,
                 frame_index=frame_packet.frame_index,
-                timestamp_seconds=frame_packet.timestamp_seconds,           
+                timestamp_seconds=(
+                    frame_packet.timestamp_seconds
+                ),
             )
+
             draw_temporal_state_overlay(
                 frame=frame,
                 temporal_result=temporal_result,
-)
+            )
+
+            draw_head_pose_overlay(
+                frame=frame,
+                head_pose_result=head_pose_result,
+            )
+
             cv2.imshow(
-                "Cabin Sensing - Source Independent Perception",
+                WINDOW_NAME,
                 frame,
             )
 
@@ -242,10 +298,16 @@ def run_pipeline(
 
 
 def main() -> None:
+    """
+    Application entry point.
+    """
+
     args = parse_arguments()
 
     try:
-        video_source = create_video_source(args)
+        video_source = create_video_source(
+            args
+        )
 
         run_pipeline(
             video_source=video_source,
@@ -253,7 +315,9 @@ def main() -> None:
         )
 
     except (ValueError, RuntimeError) as error:
-        print(f"[ERROR] {error}")
+        print(
+            f"[ERROR] {error}"
+        )
 
 
 if __name__ == "__main__":
