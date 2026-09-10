@@ -8,10 +8,17 @@ Point2D = Tuple[int, int]
 
 
 SELECTED_FACE_LANDMARKS = {
+    # Eye corners
     "left_eye_outer": 33,
     "left_eye_inner": 133,
     "right_eye_inner": 362,
     "right_eye_outer": 263,
+
+    # Iris centers for Milestone 6 gaze estimation
+    "left_iris_center": 468,
+    "right_iris_center": 473,
+
+    # Existing facial landmarks
     "nose_tip": 1,
     "mouth_left": 61,
     "mouth_right": 291,
@@ -19,6 +26,8 @@ SELECTED_FACE_LANDMARKS = {
     "lower_lip": 14,
     "chin": 152,
     "forehead": 10,
+
+    # Eyelid landmarks
     "left_eye_upper": 159,
     "left_eye_lower": 145,
     "right_eye_upper": 386,
@@ -44,7 +53,11 @@ class FaceMeshDetector:
         )
 
     @staticmethod
-    def landmark_to_pixel(landmark, frame_width: int, frame_height: int) -> Point2D:
+    def landmark_to_pixel(
+        landmark,
+        frame_width: int,
+        frame_height: int,
+    ) -> Point2D:
         x = int(landmark.x * frame_width)
         y = int(landmark.y * frame_height)
         return x, y
@@ -88,8 +101,15 @@ class FacialGeometryExtractor:
     """
 
     @staticmethod
-    def euclidean_distance(point_a: Point2D, point_b: Point2D) -> float:
-        return float(np.linalg.norm(np.array(point_a) - np.array(point_b)))
+    def euclidean_distance(
+        point_a: Point2D,
+        point_b: Point2D,
+    ) -> float:
+        return float(
+            np.linalg.norm(
+                np.array(point_a) - np.array(point_b)
+            )
+        )
 
     def compute_eye_aspect_ratio(
         self,
@@ -98,8 +118,14 @@ class FacialGeometryExtractor:
         upper: Point2D,
         lower: Point2D,
     ) -> float:
-        vertical_distance = self.euclidean_distance(upper, lower)
-        horizontal_distance = self.euclidean_distance(outer, inner)
+        vertical_distance = self.euclidean_distance(
+            upper,
+            lower,
+        )
+        horizontal_distance = self.euclidean_distance(
+            outer,
+            inner,
+        )
 
         if horizontal_distance < 1e-6:
             return 0.0
@@ -113,15 +139,24 @@ class FacialGeometryExtractor:
         upper_lip: Point2D,
         lower_lip: Point2D,
     ) -> float:
-        vertical_distance = self.euclidean_distance(upper_lip, lower_lip)
-        horizontal_distance = self.euclidean_distance(mouth_left, mouth_right)
+        vertical_distance = self.euclidean_distance(
+            upper_lip,
+            lower_lip,
+        )
+        horizontal_distance = self.euclidean_distance(
+            mouth_left,
+            mouth_right,
+        )
 
         if horizontal_distance < 1e-6:
             return 0.0
 
         return vertical_distance / horizontal_distance
 
-    def compute_features(self, landmarks: Dict[str, Point2D]) -> Dict[str, float]:
+    def compute_features(
+        self,
+        landmarks: Dict[str, Point2D],
+    ) -> Dict[str, float]:
         left_ear = self.compute_eye_aspect_ratio(
             outer=landmarks["left_eye_outer"],
             inner=landmarks["left_eye_inner"],
