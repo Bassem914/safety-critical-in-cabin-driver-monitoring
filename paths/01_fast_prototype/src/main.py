@@ -17,16 +17,19 @@ from perception.face_features import (
     FaceMeshDetector,
     FacialGeometryExtractor,
 )
+from perception.gaze import (
+    GazeEstimator,
+    GazeResult,
+)
 from perception.head_pose import (
     HeadPoseEstimator,
     HeadPoseResult,
 )
 from perception.visualization import (
-    draw_head_pose_overlay,
+    create_dashboard_canvas,
+    draw_dashboard_sidebar,
+    draw_milestone_title,
     draw_selected_landmarks,
-    draw_source_metadata_overlay,
-    draw_status_overlay,
-    draw_temporal_state_overlay,
 )
 
 
@@ -35,7 +38,7 @@ WINDOW_NAME = "Cabin Sensing - Source Independent Perception"
 
 def parse_arguments() -> argparse.Namespace:
     """
-    Parse command-line arguments for source selection and display behavior.
+    Parse command-line arguments.
     """
 
     parser = argparse.ArgumentParser(
@@ -56,23 +59,20 @@ def parse_arguments() -> argparse.Namespace:
         "--camera-index",
         type=int,
         default=0,
-        help="Webcam index when --source webcam is selected.",
+        help="Webcam index.",
     )
 
     parser.add_argument(
         "--video-path",
         type=str,
         default=None,
-        help="Local video path when --source file is selected.",
+        help="Local video path.",
     )
 
     parser.add_argument(
         "--mirror",
         action="store_true",
-        help=(
-            "Horizontally mirror frames. "
-            "Recommended only for webcam visualization."
-        ),
+        help="Horizontally mirror frames.",
     )
 
     return parser.parse_args()
@@ -81,9 +81,6 @@ def parse_arguments() -> argparse.Namespace:
 def create_video_source(
     args: argparse.Namespace,
 ) -> VideoSource:
-    """
-    Create the selected source implementation.
-    """
 
     if args.source == "webcam":
         return WebcamVideoSource(
@@ -92,7 +89,8 @@ def create_video_source(
 
     if not args.video_path:
         raise ValueError(
-            "--video-path is required when --source file is selected."
+            "--video-path is required when "
+            "--source file is selected."
         )
 
     return FileVideoSource(
@@ -104,46 +102,57 @@ def run_pipeline(
     video_source: VideoSource,
     mirror: bool,
 ) -> None:
-    """
-    Run the shared perception pipeline for any VideoSource.
-    """
 
     if not video_source.is_opened():
         raise RuntimeError(
-            f"Could not open video source: {video_source.source_name}"
+            "Could not open video source: "
+            f"{video_source.source_name}"
         )
 
     face_detector = FaceMeshDetector()
     geometry_extractor = FacialGeometryExtractor()
     head_pose_estimator = HeadPoseEstimator()
+    gaze_estimator = GazeEstimator()
     temporal_engine = TemporalRuleEngine()
 
     previous_processing_time = perf_counter()
 
-    print("[INFO] Source-independent perception pipeline started.")
-    print(f"[INFO] Source: {video_source.source_name}")
-    print(f"[INFO] Source FPS: {video_source.fps:.2f}")
-    print(f"[INFO] Mirroring enabled: {mirror}")
-    print("[INFO] Press 'q' inside the video window to quit.")
+    print(
+        "[INFO] Source-independent "
+        "perception pipeline started."
+    )
+    print(
+        f"[INFO] Source: "
+        f"{video_source.source_name}"
+    )
+    print(
+        f"[INFO] Source FPS: "
+        f"{video_source.fps:.2f}"
+    )
+    print(
+        f"[INFO] Mirroring enabled: "
+        f"{mirror}"
+    )
+    print(
+        "[INFO] Press 'q' inside "
+        "the video window to quit."
+    )
 
     cv2.namedWindow(
         WINDOW_NAME,
         cv2.WINDOW_NORMAL,
     )
 
-    cv2.resizeWindow(
-        WINDOW_NAME,
-        1280,
-        720,
-    )
-
     try:
         while True:
-            frame_packet = video_source.read()
+            frame_packet = (
+                video_source.read()
+            )
 
             if frame_packet is None:
                 print(
-                    "[INFO] Video source ended or acquisition stopped."
+                    "[INFO] Video source ended "
+                    "or acquisition stopped."
                 )
                 break
 
@@ -155,7 +164,9 @@ def run_pipeline(
                     1,
                 )
 
-            frame_height, frame_width = frame.shape[:2]
+            frame_height, frame_width = (
+                frame.shape[:2]
+            )
 
             rgb_frame = cv2.cvtColor(
                 frame,
@@ -170,7 +181,9 @@ def run_pipeline(
                 )
             )
 
-            current_processing_time = perf_counter()
+            current_processing_time = (
+                perf_counter()
+            )
 
             processing_duration = (
                 current_processing_time
@@ -183,7 +196,9 @@ def run_pipeline(
                 else 0.0
             )
 
-            previous_processing_time = current_processing_time
+            previous_processing_time = (
+                current_processing_time
+            )
 
             face_detected = (
                 selected_landmarks is not None
@@ -195,8 +210,17 @@ def run_pipeline(
                 else 0
             )
 
-            features: Optional[dict[str, float]] = None
-            head_pose_result: Optional[HeadPoseResult] = None
+            features: Optional[
+                dict[str, float]
+            ] = None
+
+            head_pose_result: Optional[
+                HeadPoseResult
+            ] = None
+
+            gaze_result: Optional[
+                GazeResult
+            ] = None
 
             if selected_landmarks is not None:
                 features = (
@@ -210,6 +234,12 @@ def run_pipeline(
                         landmarks=selected_landmarks,
                         frame_width=frame_width,
                         frame_height=frame_height,
+                    )
+                )
+
+                gaze_result = (
+                    gaze_estimator.estimate(
+                        landmarks=selected_landmarks
                     )
                 )
 
@@ -231,62 +261,70 @@ def run_pipeline(
                 else None
             )
 
-            temporal_result: TemporalDecisionResult = (
-                temporal_engine.update(
-                    timestamp_seconds=(
-                        frame_packet.timestamp_seconds
-                    ),
-                    face_detected=face_detected,
-                    ear=ear,
-                    mar=mar,
-                )
+            temporal_result: (
+                TemporalDecisionResult
+            ) = temporal_engine.update(
+                timestamp_seconds=(
+                    frame_packet.timestamp_seconds
+                ),
+                face_detected=face_detected,
+                ear=ear,
+                mar=mar,
             )
+
             if (
                 not face_detected
                 and temporal_result.face_loss_duration_seconds
                 >= temporal_engine.config.prolonged_face_loss_seconds
             ):
                 head_pose_estimator.reset()
-            draw_status_overlay(
+
+            draw_milestone_title(
                 frame=frame,
+                milestone_text=(
+                    "Path 1 - Milestone 6: "
+                    "Gaze Estimation"
+                ),
+            )
+
+            display_frame, display_image_width = (
+                create_dashboard_canvas(
+                    frame=frame,
+                )
+            )
+
+            draw_dashboard_sidebar(
+                canvas=display_frame,
+                image_width=display_image_width,
                 fps=processing_fps,
                 face_detected=face_detected,
                 landmark_count=landmark_count,
-                milestone_text=(
-                    "Path 1 - Milestone 5: "
-                    "Head Pose Estimation"
-                ),
-                features=features,
-            )
-
-            draw_source_metadata_overlay(
-                frame=frame,
                 source_name=frame_packet.source_name,
                 frame_index=frame_packet.frame_index,
                 timestamp_seconds=(
                     frame_packet.timestamp_seconds
                 ),
-            )
-
-            draw_temporal_state_overlay(
-                frame=frame,
+                features=features,
                 temporal_result=temporal_result,
-            )
-
-            draw_head_pose_overlay(
-                frame=frame,
                 head_pose_result=head_pose_result,
+                gaze_result=gaze_result,
             )
 
             cv2.imshow(
                 WINDOW_NAME,
-                frame,
+                display_frame,
             )
 
-            key = cv2.waitKey(1) & 0xFF
+            key = (
+                cv2.waitKey(1)
+                & 0xFF
+            )
 
             if key == ord("q"):
-                print("[INFO] Quit requested by user.")
+                print(
+                    "[INFO] Quit requested "
+                    "by user."
+                )
                 break
 
     finally:
@@ -294,19 +332,19 @@ def run_pipeline(
         video_source.release()
         cv2.destroyAllWindows()
 
-    print("[INFO] Perception pipeline finished cleanly.")
+    print(
+        "[INFO] Perception pipeline "
+        "finished cleanly."
+    )
 
 
 def main() -> None:
-    """
-    Application entry point.
-    """
 
     args = parse_arguments()
 
     try:
-        video_source = create_video_source(
-            args
+        video_source = (
+            create_video_source(args)
         )
 
         run_pipeline(
@@ -314,7 +352,10 @@ def main() -> None:
             mirror=args.mirror,
         )
 
-    except (ValueError, RuntimeError) as error:
+    except (
+        ValueError,
+        RuntimeError,
+    ) as error:
         print(
             f"[ERROR] {error}"
         )

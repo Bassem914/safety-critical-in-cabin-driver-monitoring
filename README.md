@@ -46,8 +46,8 @@ Current Stage:
 
 Current Progress:
 
-- ✅ 6 milestones completed
-- 🚧 Milestone 6 in preparation
+- ✅ 7 milestone stages completed
+- 🚧 Milestone 7 in preparation
 
 Completed milestones currently include:
 
@@ -57,6 +57,7 @@ Completed milestones currently include:
 - Milestone 4A
 - Milestone 4B
 - Milestone 5
+- Milestone 6
 
 ---
 
@@ -70,8 +71,8 @@ Completed milestones currently include:
 | Milestone 4A | ✅ Completed | Source-independent webcam and recorded-video input |
 | Milestone 4B | ✅ Completed | Face-level temporal state baseline |
 | Milestone 5 | ✅ Completed | Geometric head pose estimation: yaw, pitch, and roll |
-| Milestone 6 | 🔜 Next | Gaze estimation |
-| Milestone 7 | Planned | Body pose and posture analysis |
+| Milestone 6 | ✅ Completed | Geometric gaze estimation and prototype gaze-direction baseline |
+| Milestone 7 | 🔜 Next | Body pose and posture analysis |
 | Milestone 8 | Planned | Hand activity analysis |
 | Milestone 9 | Planned | Unified temporal feature layer |
 | Milestone 10 | Planned | Multimodal driver-behavior modeling |
@@ -304,9 +305,119 @@ Documentation:
 - [Implementation](docs/implementation/path_01_milestone_05_head_pose_estimation.md)
 - [Validation](docs/validation/path_01_milestone_05_head_pose_estimation_validation.md)
 
+---
+
+## Milestone 6 — Gaze Estimation
+
+Milestone 6 extends the facial perception pipeline with an interpretable geometric gaze-estimation baseline using refined MediaPipe iris landmarks.
+
+Implemented capabilities:
+
+- refined iris landmark integration
+- per-eye normalized horizontal and vertical iris geometry
+- bilateral horizontal coordinate canonicalization
+- combined horizontal and vertical gaze features
+- horizontal inter-eye disagreement `dH`
+- vertical inter-eye disagreement `dV`
+- configurable bilateral consistency thresholds
+- `GOOD` / `LOW` gaze-consistency state
+- prototype geometric gaze-direction labels
+- `CENTER`, `LEFT`, `RIGHT`, `UP`, `DOWN`
+- diagonal gaze labels
+- `UNKNOWN` output for inconsistent bilateral measurements
+- deterministic gaze smoke tests
+- controlled webcam gaze-direction validation
+- source-independent recorded-video validation
+- private DMD sample validation
+- dedicated external perception dashboard
+
+Current geometric outputs:
+
+```text
+Left eye H / V
+Right eye H / V
+Combined H / V
+dH / dV
+Consistency
+Direction
+```
+
+Validated geometric convention:
+
+```text
+Higher H → LEFT
+Lower H  → RIGHT
+Lower V  → UP
+Higher V → DOWN
+```
+
+Current prototype direction thresholds:
+
+```text
+H < 0.40  → RIGHT
+H > 0.56  → LEFT
+otherwise → horizontal CENTER
+
+V < 0.41  → UP
+V > 0.50  → DOWN
+otherwise → vertical CENTER
+```
+
+These thresholds are prototype parameters derived from initial controlled validation. They are not calibrated gaze angles, universal driver thresholds, or production DMS specifications.
+
+### Bilateral Consistency
+
+The implementation tracks disagreement between the two eyes:
+
+```text
+dH = |H_left - H_right|
+dV = |V_left - V_right|
+```
+
+Current prototype consistency limits are:
+
+```text
+dH <= 0.15
+dV <= 0.20
+```
+
+A `GOOD` consistency state means that both eyes agree sufficiently according to these thresholds. It does not guarantee absolute gaze accuracy. Strong head pose can introduce common geometric bias into both eyes while preserving low inter-eye disagreement.
+
+### Direction Semantics
+
+The direction output is a geometric perception label only. It is not directly interpreted as `DISTRACTED`, `INATTENTIVE`, `DROWSY`, or `UNRESPONSIVE`. Behavioral interpretation remains reserved for later temporal and multimodal milestones.
+
+### Validation
+
+Validation includes deterministic synthetic gaze tests, bilateral canonicalization checks, inter-eye disagreement and consistency checks, controlled webcam testing for the five primary directions, recorded-video validation through `FileVideoSource`, and private DMD sample validation.
+
+Representative webcam observations included:
+
+```text
+Intentional LEFT gaze:
+Combined H ≈ 0.678
+Combined V ≈ 0.471
+Head pose approximately neutral
+Consistency = GOOD
+
+Intentional UP gaze:
+Combined H ≈ 0.501
+Combined V ≈ 0.399
+dH ≈ 0.022
+dV ≈ 0.069
+Consistency = GOOD
+```
+
+Private DMD media and derived validation material remain outside the repository unless redistribution rights are explicitly confirmed.
+
+Documentation:
+
+- [Implementation](docs/implementation/path_01_milestone_06_gaze_estimation.md)
+- [Validation](docs/validation/path_01_milestone_06_gaze_estimation_validation.md)
+
 Next milestone:
 
-**Path 1 — Milestone 6: Gaze Estimation**
+**Path 1 — Milestone 7: Body Pose and Posture Analysis**
 
 ---
 
@@ -340,8 +451,18 @@ The current Path 1 prototype supports:
 - prolonged face-loss pose reset
 - deterministic head-pose smoke tests
 - source-independent head-pose processing
+- refined iris landmark extraction
+- per-eye normalized gaze H/V geometry
+- bilateral horizontal gaze canonicalization
+- combined gaze H/V features
+- inter-eye disagreement `dH` / `dV`
+- gaze consistency assessment
+- prototype geometric gaze-direction labels
+- deterministic gaze smoke tests
+- source-independent gaze processing
 - real-time temporal-state visualization
 - real-time head-pose visualization
+- external perception dashboard
 - privacy-aware local validation
 
 ---
@@ -357,15 +478,19 @@ Timestamped FramePacket
                 ↓
 MediaPipe Face Mesh
                 ↓
-Selected Facial Landmarks
-        ┌───────────────┴───────────────┐
-        ↓                               ↓
-EAR / MAR Feature Extraction      Head Pose Estimation
-        ↓                               ↓
-Temporal Rule Engine              Yaw / Pitch / Roll
-        └───────────────┬───────────────┘
+Selected Facial + Iris Landmarks
+        ┌───────────────┼────────────────┐
+        ↓               ↓                ↓
+EAR / MAR          Head Pose         Gaze Estimation
+Extraction         Estimation             ↓
+    ↓                  ↓            Left / Right H/V
+Temporal           Yaw / Pitch      Combined H/V
+Rule Engine        / Roll           dH / dV
+                                    Consistency
+                                    Direction
+        └───────────────┬────────────────┘
                         ↓
-              State / Pose Visualization
+          External Perception Dashboard
 ```
 
 Current module responsibilities:
@@ -389,6 +514,13 @@ perception/head_pose.py
     pitch
     roll
     pose continuity
+
+perception/gaze.py
+    iris geometry
+    bilateral H/V normalization
+    inter-eye disagreement
+    consistency
+    prototype geometric direction
 
 decision/temporal_rules.py
     timestamp-based temporal candidates
@@ -440,6 +572,9 @@ docs/validation/path_01_milestone_04B_face_temporal_state_baseline_validation.md
 
 docs/implementation/path_01_milestone_05_head_pose_estimation.md
 docs/validation/path_01_milestone_05_head_pose_estimation_validation.md
+
+docs/implementation/path_01_milestone_06_gaze_estimation.md
+docs/validation/path_01_milestone_06_gaze_estimation_validation.md
 ```
 
 ---
@@ -530,14 +665,13 @@ Private dataset media remains local unless redistribution is explicitly permitte
 - ✅ Source-Independent Video Input
 - ✅ Face-Level Temporal State Baseline
 - ✅ Head Pose Estimation
+- ✅ Gaze Estimation
 
 ## Next
 
-- 🔜 Gaze Estimation
+- 🔜 Body Pose and Posture Analysis
 
 ## Planned
-
-- Body Pose and Posture Analysis
 - Hand Activity Analysis
 - Unified Temporal Feature Layer
 - Multimodal Driver Behavior Modeling
@@ -566,6 +700,11 @@ Current geometric and perception concepts include:
 - Euler angles
 - coordinate-frame normalization
 - temporal estimator continuity
+- refined iris landmarks
+- normalized iris-position geometry
+- bilateral gaze coordinate canonicalization
+- inter-eye gaze disagreement
+- prototype gaze-direction classification
 
 ---
 
@@ -586,7 +725,15 @@ Current limitations include:
 - no formal head-pose confidence output
 - no reprojection-error quality metric
 - no quantitative real-world head-pose ground-truth benchmark yet
-- no final gaze estimation yet
+- 2D gaze geometry only; no calibrated 3D gaze vector
+- no camera-specific gaze calibration
+- no driver-specific gaze calibration
+- fixed prototype gaze-direction thresholds
+- gaze sensitivity to strong head pose and perspective distortion
+- no explicit eye-openness gate for gaze validity
+- inter-eye consistency is not calibrated gaze confidence
+- no quantitative real-world gaze ground-truth benchmark yet
+- no temporal gaze-away interpretation yet
 - no behavioral distraction classification yet
 - no production or medical safety claims
 
@@ -657,20 +804,27 @@ The repository emphasizes:
 
 The next planned milestone is:
 
-**Path 1 — Milestone 6: Gaze Estimation**
+**Path 1 — Milestone 7: Body Pose and Posture Analysis**
 
-The objective will be to extend the current perception stack from:
-
-```text
-Where is the driver's head oriented?
-```
-
-toward:
+The current Path 1 perception stack now provides:
 
 ```text
-Where are the driver's eyes / visual attention directed?
+Facial geometry
++
+Temporal face-level state
++
+Head pose
++
+Gaze geometry and prototype gaze direction
 ```
 
-Head pose will remain an independent geometric signal and will later provide context for gaze and attention reasoning.
+The next step is to extend perception beyond the face toward upper-body pose and posture.
 
-Behavioral distraction classification will remain separate until sufficient temporal and multimodal evidence is available.
+The objective is to introduce interpretable body-level geometric features that can later support reasoning about:
+
+- abnormal or unsafe posture
+- leaning and torso orientation
+- driver-body movement
+- multimodal driver-state analysis
+
+Body posture will remain an independent perception signal at this stage. Behavioral and safety interpretation will continue to be introduced only after sufficient temporal and multimodal evidence is available.
