@@ -3,6 +3,7 @@ from time import perf_counter
 from typing import Optional
 
 import cv2
+import numpy as np
 
 from acquisition.video_source import (
     FileVideoSource,
@@ -12,6 +13,11 @@ from acquisition.video_source import (
 from decision.temporal_rules import (
     TemporalDecisionResult,
     TemporalRuleEngine,
+)
+from perception.body_features import (
+    BodyGeometryExtractor,
+    BodyPoseDetector,
+    BodyPostureEstimator,
 )
 from perception.face_features import (
     FaceMeshDetector,
@@ -33,7 +39,66 @@ from perception.visualization import (
 )
 
 
-WINDOW_NAME = "Cabin Sensing - Source Independent Perception"
+WINDOW_NAME = "Cabin Sensing"
+
+
+def draw_body_landmarks(frame, pose) -> None:
+    """Draw selected shoulders/hips only when landmarks are available."""
+    if pose is None:
+        return
+    colors = {"left_shoulder": (0, 170, 0), "right_shoulder": (0, 170, 0),
+              "left_hip": (0, 190, 220), "right_hip": (0, 190, 220)}
+    for name, landmark in pose.landmarks.items():
+        cv2.circle(frame, landmark.pixel, 6, colors.get(name, (255, 255, 255)), -1)
+
+
+def append_body_dashboard(canvas, body_pose, body_geometry, body_posture, estimator):
+    """Preserve the existing M6 dashboard; append a separate white M7 panel."""
+    height, width = canvas.shape[:2]
+    panel_width = 420
+    out = np.full((max(height, 480), width + panel_width, 3), 255, dtype=np.uint8)
+    out[:height, :width] = canvas
+    x, y = width + 16, 36
+
+    def line(label, value, *, color=(45, 45, 45), step=32):
+        nonlocal y
+        cv2.putText(out, f"{label}: {value}", (x, y), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.54, color, 1, cv2.LINE_AA)
+        y += step
+
+    def fmt(value, precision=4):
+        return "N/A" if value is None else f"{value:.{precision}f}"
+
+    cv2.putText(out, "BODY POSTURE", (x, y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.60, (25, 25, 25), 2, cv2.LINE_AA)
+    y += 42
+    line("Pose", "VALID" if body_pose and body_pose.all_required_landmarks_visible
+         else "LOW VISIBILITY" if body_pose else "NOT DETECTED")
+    line("Geometry", "VALID" if body_geometry and body_geometry.geometry_valid else "INVALID")
+    status = "CALIBRATING" if estimator.is_calibrating else (
+        "CALIBRATED" if estimator.is_calibrated else "NOT CALIBRATED")
+    line("Calibration", status)
+    valid_count, target_count = estimator.calibration_progress
+    line("Neutral samples", f"{valid_count}/{target_count}")
+    line("Lateral", body_posture.lateral_state.value)
+    line("Sagittal", body_posture.sagittal_state.value)
+    y += 8
+    line("Lateral angle", fmt(body_posture.torso_lateral_angle_degrees, 2) + " deg")
+    line("Current torso dZ", fmt(body_geometry.torso_depth_delta if body_geometry else None))
+    line("Neutral torso dZ", fmt(estimator.neutral_torso_depth_delta))
+    line("Relative dZ", fmt(body_posture.torso_depth_change))
+    line("Normalized torso", fmt(body_geometry.normalized_torso_length if body_geometry else None, 3))
+    y += 10
+    cv2.putText(out, "C: calibrate  |  R: reset  |  Q: quit", (x, y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.46, (60, 60, 60), 1, cv2.LINE_AA)
+    y += 32
+    cv2.putText(out, "Depth is non-metric; lateral motion may", (x, y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.43, (90, 90, 90), 1, cv2.LINE_AA)
+    y += 23
+    cv2.putText(out, "also trigger forward-lean classification.", (x, y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.43, (90, 90, 90), 1, cv2.LINE_AA)
+    return out
+
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -75,6 +140,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Horizontally mirror frames.",
     )
 
+    parser.add_argument(
+        "--auto-calibrate-file", action="store_true",
+        help="For a controlled file starting neutral: collect the first 30 valid "
+             "neutral frames automatically. Never use on arbitrary clips.",
+    )
     return parser.parse_args()
 
 
@@ -101,6 +171,7 @@ def create_video_source(
 def run_pipeline(
     video_source: VideoSource,
     mirror: bool,
+    auto_calibrate_file: bool = False,
 ) -> None:
 
     if not video_source.is_opened():
@@ -114,6 +185,17 @@ def run_pipeline(
     head_pose_estimator = HeadPoseEstimator()
     gaze_estimator = GazeEstimator()
     temporal_engine = TemporalRuleEngine()
+    body_detector = BodyPoseDetector()
+    body_geometry_extractor = BodyGeometryExtractor()
+    body_posture_estimator = BodyPostureEstimator()
+    # Only controlled research clips with a confirmed neutral opening segment
+    # should be automatically calibrated. Otherwise press C while neutral.
+    automatic_file_calibration = (
+        isinstance(video_source, FileVideoSource)
+        and auto_calibrate_file
+    )
+    if automatic_file_calibration:
+        body_posture_estimator.begin_calibration()
 
     previous_processing_time = perf_counter()
 
@@ -163,6 +245,16 @@ def run_pipeline(
                     frame,
                     1,
                 )
+
+            body_pose = body_detector.detect(frame)
+            body_geometry = body_geometry_extractor.compute_features(body_pose)
+            # One fresh frame per update; calibration is never fed on UI redraw.
+            if body_posture_estimator.is_calibrating:
+                just_completed = body_posture_estimator.update_calibration(body_geometry)
+                if just_completed:
+                    print("[M7] " + body_posture_estimator.calibration_message)
+            body_posture = body_posture_estimator.estimate(body_geometry)
+            draw_body_landmarks(frame, body_pose)
 
             frame_height, frame_width = (
                 frame.shape[:2]
@@ -282,8 +374,8 @@ def run_pipeline(
             draw_milestone_title(
                 frame=frame,
                 milestone_text=(
-                    "Path 1 - Milestone 6: "
-                    "Gaze Estimation"
+                    "Path 1 - Milestone 7: "
+                    "Integrated Body Posture"
                 ),
             )
 
@@ -310,6 +402,11 @@ def run_pipeline(
                 gaze_result=gaze_result,
             )
 
+            display_frame = append_body_dashboard(
+                display_frame, body_pose, body_geometry, body_posture,
+                body_posture_estimator,
+            )
+
             cv2.imshow(
                 WINDOW_NAME,
                 display_frame,
@@ -320,7 +417,13 @@ def run_pipeline(
                 & 0xFF
             )
 
-            if key == ord("q"):
+            if key == ord("c"):
+                body_posture_estimator.begin_calibration()
+                print("Calibrating: remain neutral for 30 valid frames.")
+            elif key == ord("r"):
+                body_posture_estimator.reset_calibration()
+                print("Calibration reset.")
+            elif key == ord("q"):
                 print(
                     "[INFO] Quit requested "
                     "by user."
@@ -329,6 +432,7 @@ def run_pipeline(
 
     finally:
         face_detector.close()
+        body_detector.close()
         video_source.release()
         cv2.destroyAllWindows()
 
@@ -350,6 +454,7 @@ def main() -> None:
         run_pipeline(
             video_source=video_source,
             mirror=args.mirror,
+            auto_calibrate_file=args.auto_calibrate_file,
         )
 
     except (

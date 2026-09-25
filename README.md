@@ -46,10 +46,11 @@ Current Stage:
 
 Current Progress:
 
-- ✅ 7 milestone stages completed
-- 🚧 Milestone 7 in preparation
+- ✅ Milestones 1–7: prototype implementation completed (including Milestones 4A and 4B)
+- ✅ Milestone 7: 8/8 deterministic tests passed; integrated recorded-video replay completed with 30-frame auto-calibration and clean exit
+- 📋 Separate release status: M7 branch awaits Git review and merge. Final-code combined webcam/UI and previous-feature regression are not independently documented in the last supplied run.
 
-Completed milestones currently include:
+Completed prototype milestones currently include:
 
 - Milestone 1
 - Milestone 2
@@ -58,6 +59,9 @@ Completed milestones currently include:
 - Milestone 4B
 - Milestone 5
 - Milestone 6
+- Milestone 7
+
+Milestone 7 is complete at the agreed prototype scope on `feat/body-pose-posture`. Its integrated recorded-file runtime check passed on 2026-09-24. The final Git merge is pending; the latest-code combined webcam/UI and M1–M6 regression checks are not separately confirmed in the available final log.
 
 ---
 
@@ -72,7 +76,7 @@ Completed milestones currently include:
 | Milestone 4B | ✅ Completed | Face-level temporal state baseline |
 | Milestone 5 | ✅ Completed | Geometric head pose estimation: yaw, pitch, and roll |
 | Milestone 6 | ✅ Completed | Geometric gaze estimation and prototype gaze-direction baseline |
-| Milestone 7 | 🔜 Next | Body pose and posture analysis |
+| Milestone 7 | ✅ Completed | Four-landmark body geometry, lateral/sagittal posture |
 | Milestone 8 | Planned | Hand activity analysis |
 | Milestone 9 | Planned | Unified temporal feature layer |
 | Milestone 10 | Planned | Multimodal driver-behavior modeling |
@@ -415,9 +419,43 @@ Documentation:
 - [Implementation](docs/implementation/path_01_milestone_06_gaze_estimation.md)
 - [Validation](docs/validation/path_01_milestone_06_gaze_estimation_validation.md)
 
-Next milestone:
+Milestones 6 and 7 are complete at prototype scope. Milestone 7 remains on its feature branch pending final Git review and merge.
 
-**Path 1 — Milestone 7: Body Pose and Posture Analysis**
+---
+
+## Milestone 7 — Body Pose and Posture Analysis
+
+**Status:** **Prototype completed** on `feat/body-pose-posture` (2026-09-24); eight deterministic tests passed and the integrated controlled-file run completed with 30-frame automatic calibration and clean shutdown. Repository merge remains pending. The latest-code combined webcam/UI and M1–M6 regression checks were not separately confirmed in the final runtime log.
+
+- MediaPipe Pose extraction of left/right shoulders and hips (landmarks 11, 12, 23, 24)
+- Visibility and minimum torso-geometry validity checks
+- Shoulder/hip midpoints, line angles, torso lateral angle, shoulder/hip widths and normalized torso length
+- Non-metric shoulder-minus-hip depth feature, `torso_dZ`
+- Two independent geometric states: `UPRIGHT` / `LEAN_LEFT` / `LEAN_RIGHT` and `NOT_CALIBRATED` / `CALIBRATING` / `NEUTRAL` / `FORWARD_LEAN`
+- Explicit 30-valid-frame neutral calibration, median baseline, calibration-spread rejection and reset
+- Provisional ±6° lateral and −0.08 *calibration-relative* depth decision boundaries
+- Webcam smoke test, controlled local video playback and experimental CSV logging
+- Integrated source-independent `main.py` pipeline with an additional white M7 dashboard panel
+- Eight passing deterministic tests for estimator logic and calibration lifecycle
+
+**Interpretation caution:** MediaPipe depth is not a physical distance. Lateral leaning can alter the sagittal depth proxy and sometimes co-trigger `FORWARD_LEAN` without intentional forward movement. The classifier has not been benchmarked against frame-annotated ground truth or validated as a safety function. All eight deterministic M7 tests passed and the integrated controlled-file run completed successfully. Latest-code combined webcam/UI and M1–M6 regressions are remaining release checks, not unresolved M7 algorithm-development tasks.
+
+Run deterministic tests from `paths/01_fast_prototype`:
+
+```bash
+PYTHONPATH=src python -m unittest discover -s src/tests -p "test_m7_posture_regression.py" -v
+```
+
+Controlled file demonstration (only when the first frames are confirmed neutral):
+
+```bash
+PYTHONPATH=src python -m main --source file --video-path "D:/Cabin_sensing/practical/full_scenario_webcam_test.mp4" --auto-calibrate-file
+```
+
+Manual webcam calibration: run `PYTHONPATH=src python -m main --source webcam`, sit still and press `C` once; press `R` to reset. Calibration is held in memory for the session and is not saved across application runs.
+
+Implementation: `docs/implementation/path_01_milestone_07_body_pose_posture.md`.  
+Validation: `docs/validation/path_01_milestone_07_body_pose_posture_validation.md`.
 
 ---
 
@@ -460,6 +498,11 @@ The current Path 1 prototype supports:
 - prototype geometric gaze-direction labels
 - deterministic gaze smoke tests
 - source-independent gaze processing
+- selected shoulder/hip pose landmarks and continuous body geometry
+- independent lateral and sagittal prototype posture states
+- 30-valid-frame median neutral calibration
+- controlled body-pose recorded-video and webcam testing
+- deterministic M7 posture regression tests
 - real-time temporal-state visualization
 - real-time head-pose visualization
 - external perception dashboard
@@ -491,6 +534,14 @@ Rule Engine        / Roll           dH / dV
         └───────────────┬────────────────┘
                         ↓
           External Perception Dashboard
+                        ↑
+              MediaPipe Body Pose
+                        ↓
+          Shoulder / Hip Landmarks
+                        ↓
+         Geometry + Neutral Calibration
+                        ↓
+         Lateral + Sagittal State (M7)
 ```
 
 Current module responsibilities:
@@ -515,6 +566,12 @@ perception/head_pose.py
     roll
     pose continuity
 
+perception/body_features.py
+    shoulder/hip landmark detection
+    continuous body geometry
+    30-frame median neutral calibration
+    lateral/sagittal prototype posture states
+
 perception/gaze.py
     iris geometry
     bilateral H/V normalization
@@ -529,7 +586,11 @@ perception/visualization.py
     state and measurement visualization
 
 main.py
-    pipeline orchestration
+    source-independent M1–M7 orchestration
+    appended M7 white diagnostic panel
+
+src/tests/test_m7_posture_regression.py
+    deterministic body posture and calibration tests
 ```
 
 ---
@@ -575,6 +636,9 @@ docs/validation/path_01_milestone_05_head_pose_estimation_validation.md
 
 docs/implementation/path_01_milestone_06_gaze_estimation.md
 docs/validation/path_01_milestone_06_gaze_estimation_validation.md
+
+docs/implementation/path_01_milestone_07_body_pose_posture.md
+docs/validation/path_01_milestone_07_body_pose_posture_validation.md
 ```
 
 ---
@@ -666,13 +730,21 @@ Private dataset media remains local unless redistribution is explicitly permitte
 - ✅ Face-Level Temporal State Baseline
 - ✅ Head Pose Estimation
 - ✅ Gaze Estimation
+- ✅ Body Pose and Posture Analysis (Milestone 7)
 
-## Next
+M7 evidence: live webcam posture experiments, 30-frame median calibration, recorded-video experiments, eight passing deterministic regression tests, and a successful integrated recorded-file run.
 
-- 🔜 Body Pose and Posture Analysis
+## Repository release (separate from milestone completion)
 
-## Planned
-- Hand Activity Analysis
+- Review and commit M7 code and documentation; check Git changes for private video, dataset, screenshot, and CSV files.
+- Verify combined webcam/dashboard and prior-feature behavior on the final code revision if those checks have not already been recorded.
+- Create and merge the M7 pull request after repository review.
+
+## Next development milestone
+
+- 🔜 Milestone 8 — Hand Activity Analysis
+
+## Planned after M8
 - Unified Temporal Feature Layer
 - Multimodal Driver Behavior Modeling
 - ML and Explainable AI
@@ -705,6 +777,11 @@ Current geometric and perception concepts include:
 - bilateral gaze coordinate canonicalization
 - inter-eye gaze disagreement
 - prototype gaze-direction classification
+- MediaPipe Pose shoulder/hip geometry
+- frontal-view torso lateral angle
+- non-metric relative-depth proxy
+- neutral-frame median calibration and stability gating
+- independent lateral and sagittal prototype labels
 
 ---
 
@@ -735,6 +812,11 @@ Current limitations include:
 - no quantitative real-world gaze ground-truth benchmark yet
 - no temporal gaze-away interpretation yet
 - no behavioral distraction classification yet
+- body-pose validity gates do not verify true landmark accuracy
+- forward-depth proxy varies with camera placement, body rotation and subject
+- lateral leaning can co-trigger sagittal FORWARD_LEAN without intentional forward movement
+- no frame-annotated body-posture accuracy benchmark or multi-driver calibration
+- M7 integrated recorded-file run passed. A prior TensorFlow/MediaPipe import `MemoryError` did not recur during that run; its cause remains unconfirmed. Combined webcam/UI and M1–M6 regressions are release checks pending independent confirmation.
 - no production or medical safety claims
 
 These limitations are documented intentionally and will guide later model comparison, calibration, benchmarking, and research stages.
@@ -802,29 +884,12 @@ The repository emphasizes:
 
 # Next Development Step
 
-The next planned milestone is:
+Milestone 7 is completed at the agreed research-prototype scope. The next development milestone is M8 (Hand Activity Analysis). Before merging the completed M7 work from `feat/body-pose-posture`, carry out the separate repository release review:
 
-**Path 1 — Milestone 7: Body Pose and Posture Analysis**
+1. If not already verified on the final code revision, confirm the combined webcam/dashboard and existing M1–M6 functions. This is release regression, not further posture feature development. If the earlier import `MemoryError` recurs, investigate it as an environment issue.
+2. Preserve the successful 2026-09-24 controlled recorded-file regression log: video opened (reported source FPS 30.18), auto-calibration accepted 30 valid frames (sample range 0.0911), end of source reached, and clean shutdown. Re-run only if code or dependencies change.
+3. Preserve the eight passing deterministic M7 tests; confirm invalid body geometry does not break the integrated facial pipeline.
+4. Review implementation/validation documentation and `git diff`; keep private videos, screenshots and derived CSVs outside version control.
+5. Commit the reviewed code and documentation, create the milestone pull request, and merge after the release checks.
 
-The current Path 1 perception stack now provides:
-
-```text
-Facial geometry
-+
-Temporal face-level state
-+
-Head pose
-+
-Gaze geometry and prototype gaze direction
-```
-
-The next step is to extend perception beyond the face toward upper-body pose and posture.
-
-The objective is to introduce interpretable body-level geometric features that can later support reasoning about:
-
-- abnormal or unsafe posture
-- leaning and torso orientation
-- driver-body movement
-- multimodal driver-state analysis
-
-Body posture will remain an independent perception signal at this stage. Behavioral and safety interpretation will continue to be introduced only after sufficient temporal and multimodal evidence is available.
+After M7, the planned path proceeds to Milestone 8 (hand activity analysis). Longer-term improvements include lateral/sagittal decoupling, calibrated posture geometry and annotated multi-person evaluation. None of these are claimed to be solved in M7.
