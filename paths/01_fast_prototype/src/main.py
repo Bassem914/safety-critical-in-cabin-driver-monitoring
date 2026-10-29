@@ -3,7 +3,6 @@ from time import perf_counter
 from typing import Optional
 
 import cv2
-import numpy as np
 
 from acquisition.video_source import (
     FileVideoSource,
@@ -27,78 +26,33 @@ from perception.gaze import (
     GazeEstimator,
     GazeResult,
 )
+from perception.hand_features import (
+    HandGeometryExtractor,
+    HandLandmarkDetector,
+    HandSpatialEstimator,
+)
+from perception.hand_tracking import (
+    HandTemporalTracker,
+    build_hand_observations,
+)
 from perception.head_pose import (
     HeadPoseEstimator,
     HeadPoseResult,
 )
 from perception.visualization import (
+    append_body_dashboard,
+    append_hand_dashboard,
     create_dashboard_canvas,
+    draw_body_landmarks,
     draw_dashboard_sidebar,
+    draw_hand_landmarks,
+    draw_hand_tracks,
     draw_milestone_title,
     draw_selected_landmarks,
 )
 
 
-WINDOW_NAME = "Cabin Sensing"
-
-
-def draw_body_landmarks(frame, pose) -> None:
-    """Draw selected shoulders/hips only when landmarks are available."""
-    if pose is None:
-        return
-    colors = {"left_shoulder": (0, 170, 0), "right_shoulder": (0, 170, 0),
-              "left_hip": (0, 190, 220), "right_hip": (0, 190, 220)}
-    for name, landmark in pose.landmarks.items():
-        cv2.circle(frame, landmark.pixel, 6, colors.get(name, (255, 255, 255)), -1)
-
-
-def append_body_dashboard(canvas, body_pose, body_geometry, body_posture, estimator):
-    """Preserve the existing M6 dashboard; append a separate white M7 panel."""
-    height, width = canvas.shape[:2]
-    panel_width = 420
-    out = np.full((max(height, 480), width + panel_width, 3), 255, dtype=np.uint8)
-    out[:height, :width] = canvas
-    x, y = width + 16, 36
-
-    def line(label, value, *, color=(45, 45, 45), step=32):
-        nonlocal y
-        cv2.putText(out, f"{label}: {value}", (x, y), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.54, color, 1, cv2.LINE_AA)
-        y += step
-
-    def fmt(value, precision=4):
-        return "N/A" if value is None else f"{value:.{precision}f}"
-
-    cv2.putText(out, "BODY POSTURE", (x, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.60, (25, 25, 25), 2, cv2.LINE_AA)
-    y += 42
-    line("Pose", "VALID" if body_pose and body_pose.all_required_landmarks_visible
-         else "LOW VISIBILITY" if body_pose else "NOT DETECTED")
-    line("Geometry", "VALID" if body_geometry and body_geometry.geometry_valid else "INVALID")
-    status = "CALIBRATING" if estimator.is_calibrating else (
-        "CALIBRATED" if estimator.is_calibrated else "NOT CALIBRATED")
-    line("Calibration", status)
-    valid_count, target_count = estimator.calibration_progress
-    line("Neutral samples", f"{valid_count}/{target_count}")
-    line("Lateral", body_posture.lateral_state.value)
-    line("Sagittal", body_posture.sagittal_state.value)
-    y += 8
-    line("Lateral angle", fmt(body_posture.torso_lateral_angle_degrees, 2) + " deg")
-    line("Current torso dZ", fmt(body_geometry.torso_depth_delta if body_geometry else None))
-    line("Neutral torso dZ", fmt(estimator.neutral_torso_depth_delta))
-    line("Relative dZ", fmt(body_posture.torso_depth_change))
-    line("Normalized torso", fmt(body_geometry.normalized_torso_length if body_geometry else None, 3))
-    y += 10
-    cv2.putText(out, "C: calibrate  |  R: reset  |  Q: quit", (x, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.46, (60, 60, 60), 1, cv2.LINE_AA)
-    y += 32
-    cv2.putText(out, "Depth is non-metric; lateral motion may", (x, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.43, (90, 90, 90), 1, cv2.LINE_AA)
-    y += 23
-    cv2.putText(out, "also trigger forward-lean classification.", (x, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.43, (90, 90, 90), 1, cv2.LINE_AA)
-    return out
-
+WINDOW_NAME = "Cabin Sensing - M8 Integrated Perception"
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -141,10 +95,15 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--auto-calibrate-file", action="store_true",
-        help="For a controlled file starting neutral: collect the first 30 valid "
-             "neutral frames automatically. Never use on arbitrary clips.",
+        "--auto-calibrate-file",
+        action="store_true",
+        help=(
+            "For a controlled file starting neutral: collect the first "
+            "30 valid neutral body frames automatically. Never use this "
+            "option on an arbitrary clip."
+        ),
     )
+
     return parser.parse_args()
 
 
@@ -180,44 +139,80 @@ def run_pipeline(
             f"{video_source.source_name}"
         )
 
+    # ---------------------------------------------------------
+    # M1-M6 face/head/gaze stack
+    # ---------------------------------------------------------
+
     face_detector = FaceMeshDetector()
-    geometry_extractor = FacialGeometryExtractor()
+    facial_geometry_extractor = FacialGeometryExtractor()
     head_pose_estimator = HeadPoseEstimator()
     gaze_estimator = GazeEstimator()
     temporal_engine = TemporalRuleEngine()
+
+    # ---------------------------------------------------------
+    # M7 body posture stack
+    # ---------------------------------------------------------
+
     body_detector = BodyPoseDetector()
     body_geometry_extractor = BodyGeometryExtractor()
     body_posture_estimator = BodyPostureEstimator()
-    # Only controlled research clips with a confirmed neutral opening segment
-    # should be automatically calibrated. Otherwise press C while neutral.
+
     automatic_file_calibration = (
         isinstance(video_source, FileVideoSource)
         and auto_calibrate_file
     )
+
     if automatic_file_calibration:
         body_posture_estimator.begin_calibration()
+
+    # ---------------------------------------------------------
+    # M8 hand activity stack
+    # ---------------------------------------------------------
+
+    hand_detector = HandLandmarkDetector(
+        static_image_mode=False,
+        max_num_hands=2,
+        model_complexity=1,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
+
+    hand_geometry_extractor = HandGeometryExtractor()
+
+    hand_spatial_estimator = HandSpatialEstimator(
+        near_face_threshold=1.10,
+        torso_lateral_margin_ratio=0.65,
+        lower_region_start_ratio=0.65,
+        lower_region_extension_ratio=0.80,
+    )
+
+    # Prototype temporal association.
+    # Long-term identity stability remains a documented M8 limitation.
+    hand_tracker = HandTemporalTracker(
+        maximum_match_distance_pixels=320.0,
+        missing_tolerance_seconds=0.60,
+        handedness_mismatch_penalty_pixels=50.0,
+    )
 
     previous_processing_time = perf_counter()
 
     print(
-        "[INFO] Source-independent "
-        "perception pipeline started."
+        "[INFO] Source-independent perception pipeline started."
     )
     print(
-        f"[INFO] Source: "
-        f"{video_source.source_name}"
+        f"[INFO] Source: {video_source.source_name}"
     )
     print(
-        f"[INFO] Source FPS: "
-        f"{video_source.fps:.2f}"
+        f"[INFO] Source FPS: {video_source.fps:.2f}"
     )
     print(
-        f"[INFO] Mirroring enabled: "
-        f"{mirror}"
+        f"[INFO] Mirroring enabled: {mirror}"
     )
     print(
-        "[INFO] Press 'q' inside "
-        "the video window to quit."
+        "[INFO] M8 hand activity integration enabled."
+    )
+    print(
+        "[INFO] Press 'q' inside the video window to quit."
     )
 
     cv2.namedWindow(
@@ -227,9 +222,8 @@ def run_pipeline(
 
     try:
         while True:
-            frame_packet = (
-                video_source.read()
-            )
+
+            frame_packet = video_source.read()
 
             if frame_packet is None:
                 print(
@@ -246,15 +240,47 @@ def run_pipeline(
                     1,
                 )
 
-            body_pose = body_detector.detect(frame)
-            body_geometry = body_geometry_extractor.compute_features(body_pose)
-            # One fresh frame per update; calibration is never fed on UI redraw.
+            # =================================================
+            # M7 BODY POSE / POSTURE
+            # =================================================
+
+            body_pose = body_detector.detect(
+                frame
+            )
+
+            body_geometry = (
+                body_geometry_extractor.compute_features(
+                    body_pose
+                )
+            )
+
             if body_posture_estimator.is_calibrating:
-                just_completed = body_posture_estimator.update_calibration(body_geometry)
+                just_completed = (
+                    body_posture_estimator.update_calibration(
+                        body_geometry
+                    )
+                )
+
                 if just_completed:
-                    print("[M7] " + body_posture_estimator.calibration_message)
-            body_posture = body_posture_estimator.estimate(body_geometry)
-            draw_body_landmarks(frame, body_pose)
+                    print(
+                        "[M7] "
+                        + body_posture_estimator.calibration_message
+                    )
+
+            body_posture = (
+                body_posture_estimator.estimate(
+                    body_geometry
+                )
+            )
+
+            draw_body_landmarks(
+                frame=frame,
+                body_pose=body_pose,
+            )
+
+            # =================================================
+            # M1-M6 FACE / HEAD / GAZE
+            # =================================================
 
             frame_height, frame_width = (
                 frame.shape[:2]
@@ -271,25 +297,6 @@ def run_pipeline(
                     frame_width=frame_width,
                     frame_height=frame_height,
                 )
-            )
-
-            current_processing_time = (
-                perf_counter()
-            )
-
-            processing_duration = (
-                current_processing_time
-                - previous_processing_time
-            )
-
-            processing_fps = (
-                1.0 / processing_duration
-                if processing_duration > 0.0
-                else 0.0
-            )
-
-            previous_processing_time = (
-                current_processing_time
             )
 
             face_detected = (
@@ -315,8 +322,9 @@ def run_pipeline(
             ] = None
 
             if selected_landmarks is not None:
+
                 features = (
-                    geometry_extractor.compute_features(
+                    facial_geometry_extractor.compute_features(
                         selected_landmarks
                     )
                 )
@@ -371,18 +379,97 @@ def run_pipeline(
             ):
                 head_pose_estimator.reset()
 
+            # =================================================
+            # M8 HAND DETECTION / GEOMETRY / SPATIAL STATE
+            # =================================================
+
+            hand_detection = hand_detector.detect(
+                frame
+            )
+
+            hand_geometry_results = tuple(
+                hand_geometry_extractor.compute_geometry(
+                    hand
+                )
+                for hand in hand_detection.hands
+            )
+
+            hand_spatial_results = tuple(
+                hand_spatial_estimator.estimate(
+                    hand_geometry=geometry,
+                    face_landmarks=selected_landmarks,
+                    body_geometry=body_geometry,
+                )
+                for geometry in hand_geometry_results
+            )
+
+            hand_observations = (
+                build_hand_observations(
+                    detected_hands=hand_detection.hands,
+                    geometry_results=hand_geometry_results,
+                    spatial_results=hand_spatial_results,
+                )
+            )
+
+            hand_track_results = (
+                hand_tracker.update(
+                    timestamp_seconds=(
+                        frame_packet.timestamp_seconds
+                    ),
+                    observations=hand_observations,
+                )
+            )
+
+            draw_hand_landmarks(
+                frame=frame,
+                detection_result=hand_detection,
+            )
+
+            draw_hand_tracks(
+                frame=frame,
+                track_results=hand_track_results,
+            )
+
+            # =================================================
+            # PROCESSING FPS
+            # =================================================
+
+            current_processing_time = (
+                perf_counter()
+            )
+
+            processing_duration = (
+                current_processing_time
+                - previous_processing_time
+            )
+
+            processing_fps = (
+                1.0 / processing_duration
+                if processing_duration > 0.0
+                else 0.0
+            )
+
+            previous_processing_time = (
+                current_processing_time
+            )
+
+            # =================================================
+            # DASHBOARD
+            # =================================================
+
             draw_milestone_title(
                 frame=frame,
                 milestone_text=(
-                    "Path 1 - Milestone 7: "
-                    "Integrated Body Posture"
+                    "Path 1 - Milestone 8: "
+                    "Integrated Hand Activity Geometry"
                 ),
             )
 
-            display_frame, display_image_width = (
-                create_dashboard_canvas(
-                    frame=frame,
-                )
+            (
+                display_frame,
+                display_image_width,
+            ) = create_dashboard_canvas(
+                frame=frame,
             )
 
             draw_dashboard_sidebar(
@@ -403,8 +490,19 @@ def run_pipeline(
             )
 
             display_frame = append_body_dashboard(
-                display_frame, body_pose, body_geometry, body_posture,
-                body_posture_estimator,
+                canvas=display_frame,
+                body_pose=body_pose,
+                body_geometry=body_geometry,
+                body_posture=body_posture,
+                estimator=body_posture_estimator,
+            )
+
+            display_frame = append_hand_dashboard(
+                canvas=display_frame,
+                detection_result=hand_detection,
+                geometry_results=hand_geometry_results,
+                spatial_results=hand_spatial_results,
+                track_results=hand_track_results,
             )
 
             cv2.imshow(
@@ -418,27 +516,42 @@ def run_pipeline(
             )
 
             if key == ord("c"):
+
                 body_posture_estimator.begin_calibration()
-                print("Calibrating: remain neutral for 30 valid frames.")
-            elif key == ord("r"):
-                body_posture_estimator.reset_calibration()
-                print("Calibration reset.")
-            elif key == ord("q"):
+
                 print(
-                    "[INFO] Quit requested "
-                    "by user."
+                    "[M7] Calibrating: remain neutral "
+                    "for 30 valid frames."
                 )
+
+            elif key == ord("r"):
+
+                body_posture_estimator.reset_calibration()
+
+                print(
+                    "[M7] Calibration reset."
+                )
+
+            elif key == ord("q"):
+
+                print(
+                    "[INFO] Quit requested by user."
+                )
+
                 break
 
     finally:
+
         face_detector.close()
         body_detector.close()
+        hand_detector.close()
+
         video_source.release()
+
         cv2.destroyAllWindows()
 
     print(
-        "[INFO] Perception pipeline "
-        "finished cleanly."
+        "[INFO] Perception pipeline finished cleanly."
     )
 
 
@@ -447,20 +560,26 @@ def main() -> None:
     args = parse_arguments()
 
     try:
+
         video_source = (
-            create_video_source(args)
+            create_video_source(
+                args
+            )
         )
 
         run_pipeline(
             video_source=video_source,
             mirror=args.mirror,
-            auto_calibrate_file=args.auto_calibrate_file,
+            auto_calibrate_file=(
+                args.auto_calibrate_file
+            ),
         )
 
     except (
         ValueError,
         RuntimeError,
     ) as error:
+
         print(
             f"[ERROR] {error}"
         )
